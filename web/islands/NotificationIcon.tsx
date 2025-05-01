@@ -1,3 +1,4 @@
+import { IS_BROWSER } from "@fresh/core/runtime";
 import { useEffect, useState } from "preact/hooks";
 
 export interface NotificationIconProps {
@@ -8,6 +9,10 @@ export interface NotificationIconProps {
 
 export function NotificationIcon(props: NotificationIconProps) {
   const [unread, setUnread] = useState(false);
+  const [useBadge, setUseBadge] = useState<boolean>(() => {
+    return IS_BROWSER && Notification.permission === "granted" &&
+      !!navigator.setAppBadge;
+  });
   function poll() {
     fetch("/notifications", {
       headers: { Accept: "application/json" },
@@ -17,11 +22,30 @@ export function NotificationIcon(props: NotificationIconProps) {
       .catch(() => {});
   }
   useEffect(() => {
+    if (
+      IS_BROWSER && Notification.permission === "default" &&
+      !!navigator.setAppBadge
+    ) {
+      Notification.requestPermission().then(() =>
+        setUseBadge(Notification.permission === "granted")
+      );
+    }
+  }, []);
+  useEffect(() => {
     if (unread) return;
     poll();
     const interval = setInterval(poll, 10_000);
     return () => clearInterval(interval);
   }, [unread]);
+  useEffect(() => {
+    if (useBadge) {
+      if (unread) {
+        navigator.setAppBadge();
+      } else {
+        navigator.clearAppBadge();
+      }
+    }
+  }, [useBadge, unread]);
   return (
     <a
       href="/notifications"
